@@ -1,15 +1,15 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"strings"
-	// Uncomment this block to pass the first stage
-	// "net"
-	// "os"
 )
+
+var CRLFLEN = int32(2)
 
 func main() {
 	fmt.Println("Logs from your program will appear here!")
@@ -20,18 +20,16 @@ func main() {
 		os.Exit(1)
 	}
 	conn, err := l.Accept()
-
-	request, err := io.ReadAll(conn)
-	strings := strings.Split(string(request), " ")
-	if len(strings) > 2 {
+	command, _ := ReadCommand(conn)
+	if len(command.Args) > 1 {
 		writeErr(&conn)
 	}
 
-	if strings[0] == "PING" {
-		if len(strings) == 1 {
-			writeOk(&conn, "PONG")
+	if strings.ToUpper(string(command.Name)) == "PING" {
+		if len(command.Args) == 1 {
+			writeOk(&conn, command.Args[0])
 		} else {
-			writeOk(&conn, strings[1])
+			writeOk(&conn, []byte("PONG"))
 		}
 	}
 
@@ -41,11 +39,54 @@ func main() {
 	}
 }
 
-func writeOk(c *net.Conn, arg string) {
+func writeOk(c *net.Conn, arg []byte) {
 	responseFormat := "+%s\r\n"
-	io.WriteString(*c, fmt.Sprintf(responseFormat, arg))
+	io.WriteString(*c, fmt.Sprintf(responseFormat, string(arg)))
 }
 
 func writeErr(conn *net.Conn) {
 	io.WriteString(*conn, "-ERR Too many arguments\r\n")
+}
+
+type Command struct {
+	Name []byte
+	Args [][]byte
+}
+
+func ReadCommand(conn net.Conn) (Command, error) {
+	buf := make([]byte, 256)
+
+	_, _ = conn.Read(buf)
+	println("buf: ", string(buf))
+
+	if buf[0] != '*' {
+		return Command{}, errors.New("RESP unsupported format")
+	}
+	i := int32(1)
+	argsNum := int32(0)
+	for buf[i] != '\r' {
+		argsNum = (argsNum * 10) + int32(buf[i]-'0')
+		i++
+	}
+	array := parseBulkStringArray(buf[i+CRLFLEN:], argsNum)
+	return Command{Name: array[0], Args: array[1:]}, nil
+}
+
+func parseBulkStringArray(buf []byte, length int32) [][]byte {
+	var (
+		result [][]byte
+	)
+	for length > 0 {
+		wordLength := int32(0)
+		i := int32(1)
+		for buf[i] != '\r' {
+			wordLength = (wordLength * 10) + int32(buf[i]-'0')
+			i++
+		}
+		i += CRLFLEN
+		result = append(result, buf[i:i+wordLength])
+		buf = buf[i+wordLength+CRLFLEN:]
+		length--
+	}
+	return result
 }
