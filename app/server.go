@@ -20,16 +20,20 @@ func main() {
 		os.Exit(1)
 	}
 	conn, err := l.Accept()
-	command, _ := ReadCommand(conn)
-	if len(command.Args) > 1 {
-		writeErr(&conn)
-	}
+	defer conn.Close()
+	for {
 
-	if strings.ToUpper(string(command.Name)) == "PING" {
-		if len(command.Args) == 1 {
-			writeOk(&conn, command.Args[0])
-		} else {
-			writeOk(&conn, []byte("PONG"))
+		command, _ := ReadCommand(conn)
+		if len(command.Args) > 1 {
+			writeErr(&conn)
+		}
+
+		if strings.ToUpper(string(command.Name)) == "PING" {
+			if len(command.Args) == 1 {
+				writeOk(&conn, command.Args[0])
+			} else {
+				writeOk(&conn, []byte("PONG"))
+			}
 		}
 	}
 
