@@ -19,27 +19,57 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
-	conn, err := l.Accept()
-	defer conn.Close()
-	for {
+	//c := make(chan os.Signal, 1)
+	////signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	////
+	////go func() {
+	////	for {
+	////		select {
+	////		case <-c:
+	////			fmt.Println("process was killed")
+	////			return
+	////		default:
+	//
+	//		}
+	//	}
+	//}()
 
+	for {
+		conn, err := l.Accept()
+		go func() {
+			fmt.Println("accepted")
+			if err != nil {
+				fmt.Println("failed during connection")
+			}
+			handleConn(conn)
+			conn.Close()
+		}()
+	}
+	if err != nil {
+		fmt.Println("Error accepting connection: ", err.Error())
+		os.Exit(1)
+	}
+}
+
+func handleConn(conn net.Conn) {
+loop:
+	for {
 		command, _ := ReadCommand(conn)
 		if len(command.Args) > 1 {
 			writeErr(&conn)
 		}
-
-		if strings.ToUpper(string(command.Name)) == "PING" {
+		switch strings.ToUpper(string(command.Name)) {
+		case "PING":
 			if len(command.Args) == 1 {
 				writeOk(&conn, command.Args[0])
 			} else {
 				writeOk(&conn, []byte("PONG"))
 			}
+		case "QUIT":
+			break loop
+		default:
+			writeOk(&conn, []byte("not implemented"))
 		}
-	}
-
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
 	}
 }
 
