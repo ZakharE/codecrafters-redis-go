@@ -19,20 +19,6 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
-	//c := make(chan os.Signal, 1)
-	////signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	////
-	////go func() {
-	////	for {
-	////		select {
-	////		case <-c:
-	////			fmt.Println("process was killed")
-	////			return
-	////		default:
-	//
-	//		}
-	//	}
-	//}()
 
 	for {
 		conn, err := l.Accept()
@@ -65,6 +51,8 @@ loop:
 			} else {
 				writeOk(&conn, []byte("PONG"))
 			}
+		case "ECHO":
+			writeOk(&conn, command.Args[0])
 		case "QUIT":
 			break loop
 		default:
