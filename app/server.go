@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 )
 
 var CRLFLEN = int32(2)
@@ -41,23 +42,52 @@ func handleConn(conn net.Conn) {
 loop:
 	for {
 		command, _ := ReadCommand(conn)
-		if len(command.Args) > 1 {
-			writeErr(&conn)
-		}
 		switch strings.ToUpper(string(command.Name)) {
 		case "PING":
-			if len(command.Args) == 1 {
-				writeOk(&conn, command.Args[0])
-			} else {
-				writeOk(&conn, []byte("PONG"))
-			}
+			ping(conn, command)
 		case "ECHO":
-			writeOk(&conn, command.Args[0])
+			echo(conn, command)
 		case "QUIT":
 			break loop
+		case "SET":
+			set(conn, command)
+		case "GET":
+			get(conn, command)
+
 		default:
 			writeOk(&conn, []byte("not implemented"))
 		}
+	}
+}
+
+var cache sync.Map
+
+func set(conn net.Conn, command Command) {
+	if len(command.Args) < 2 {
+		writeErr(&conn)
+	}
+	cache.Store(string(command.Args[0]), command.Args[1])
+	writeOk(&conn, []byte("OK"))
+}
+
+func get(conn net.Conn, command Command) {
+	value, ok := cache.Load(string(command.Args[0]))
+	if ok {
+		writeOk(&conn, value.([]byte))
+		return
+	}
+	writeOk(&conn, []byte(""))
+}
+
+func echo(conn net.Conn, command Command) {
+	writeOk(&conn, command.Args[0])
+}
+
+func ping(conn net.Conn, command Command) {
+	if len(command.Args) == 1 {
+		writeOk(&conn, command.Args[0])
+	} else {
+		writeOk(&conn, []byte("PONG"))
 	}
 }
 
